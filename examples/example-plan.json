@@ -1,0 +1,24 @@
+{
+  "trip": {"people": 2, "place": "示例乐园（虚构）", "city": "示例市", "date": "2027-05-12", "audience": "情侣", "demo": true},
+  "operation": {"status": "unverified", "hours": "待核实", "source_ids": [], "decision": "出发前查官方售票和项目公告；未营业则改期。"},
+  "weather": {"status": "unverified", "summary": "此为演示日期，未查询天气。出发前查看逐小时预报。", "source_ids": []},
+  "map": {"edition_note": "演示路线，无真实导览图。", "source_ids": []},
+  "route": ["入口与公告栏", "刺激区", "午餐区", "室内区", "出口"],
+  "attractions": [
+    {"name": "示例过山车", "area": "刺激区", "operation": "unknown", "why": "先玩热门项目；开放情况待核实", "source_ids": []},
+    {"name": "示例跳楼机", "area": "刺激区", "operation": "unknown", "why": "排队过长时调换顺序", "source_ids": []},
+    {"name": "示例室内项目", "area": "室内区", "operation": "unknown", "why": "下雨时可作备选", "source_ids": []}
+  ],
+  "itinerary": [
+    {"start": "09:00", "end": "09:30", "activity": "到场、核对售票与项目公告", "buffer": "30 分钟", "fallback": "未营业则改期"},
+    {"start": "09:30", "end": "11:00", "activity": "刺激区：示例过山车", "attraction": "示例过山车", "buffer": "45 分钟", "fallback": "改玩跳楼机"},
+    {"start": "11:00", "end": "12:00", "activity": "刺激区：示例跳楼机", "attraction": "示例跳楼机", "buffer": "30 分钟", "fallback": "改为拍照休息"},
+    {"start": "12:00", "end": "13:00", "activity": "午餐与休息", "buffer": "15 分钟", "fallback": "避开高峰可提前用餐"},
+    {"start": "13:00", "end": "15:00", "activity": "室内区项目与自由补玩", "attraction": "示例室内项目", "buffer": "45 分钟", "fallback": "根据天气和现场队列调整"},
+    {"start": "15:00", "end": "16:00", "activity": "回补最喜欢的项目、返程", "buffer": "30 分钟", "fallback": "预留交通时间"}
+  ],
+  "packing": ["身份证件和预约码", "充电宝与充电线", "轻便背包", "饮水和纸巾", "防晒或雨具（按天气）"],
+  "cautions": [{"text": "本文件仅演示版式与校验逻辑，不代表任何景区的真实开放信息。", "source_ids": []}],
+  "sources": [],
+  "images": {}
+}
