@@ -1,0 +1,4 @@
+interface:
+  display_name: "travel plan In China"
+  short_description: "按人数、目的地和日期制作有来源、有路线和时间表的国内游玩 PPT"
+  default_prompt: "用 $travel-plan-in-china 按人数、地点和日期制作国内游玩 PPT，先核实开放、天气、项目和路线。"
