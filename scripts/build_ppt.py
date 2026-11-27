@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -14,6 +15,7 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
+from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches, Pt
 
 from validate_plan import validate
@@ -23,10 +25,31 @@ PAPER = "F8F5ED"
 WHITE = "FFFFFF"
 TEAL = "087F76"
 ORANGE = "E7774F"
+# Keep the original orange for decoration; use this tone for text/white labels.
+ORANGE_DARK = "BC5230"
+CLOSED = "B3261E"
 GOLD = "F3C669"
 MUTED = "61727A"
 PALE = "E4EEEA"
 FONT = "Microsoft YaHei"
+
+
+def balanced_pages(items, capacity):
+    """Keep order and avoid a nearly empty last page without shrinking text."""
+    if not items:
+        return
+    pages = (len(items) + capacity - 1) // capacity
+    count, extra = divmod(len(items), pages)
+    offset = 0
+    for index in range(pages):
+        size = count + (index < extra)
+        yield offset, items[offset:offset + size]
+        offset += size
+
+
+def row_y(index, count, capacity, top, pitch):
+    """Center short tables in their existing content area."""
+    return top + (capacity - count) * pitch / 2 + index * pitch
 
 
 def rgb(value: str) -> RGBColor:
@@ -63,6 +86,14 @@ def text(slide, value, x, y, w, h, size=16, color=NAVY, bold=False, link=None, a
         run = p.add_run()
         run.text = line
         run.font.name = FONT
+        # PowerPoint does not reliably apply a:latin to Chinese glyphs.
+        rpr = run._r.get_or_add_rPr()
+        for tag, face in (("a:ea", "微软雅黑" if FONT == "Microsoft YaHei" else FONT), ("a:cs", FONT)):
+            element = rpr.find("{http://schemas.openxmlformats.org/drawingml/2006/main}" + tag.split(":")[1])
+            if element is None:
+                element = OxmlElement(tag)
+                rpr.append(element)
+            element.set("typeface", face)
         run.font.size = Pt(size)
         run.font.bold = bold
         run.font.color.rgb = rgb(color)
@@ -109,8 +140,8 @@ def heading(prs, section, title, subtitle="", dark=False):
 
 def footer(prs, slide, label=""):
     box(slide, .62, 7.11, 12.05, .015, "D4DCD8")
-    text(slide, label, .66, 7.18, 11.1, .19, 8.2, MUTED)
-    text(slide, f"{len(prs.slides):02d}", 12.11, 7.17, .55, .2, 9, MUTED, align=PP_ALIGN.RIGHT)
+    text(slide, label, .66, 7.17, 11.1, .24, 9.5, MUTED)
+    text(slide, f"{len(prs.slides):02d}", 12.11, 7.17, .55, .24, 9.5, MUTED, align=PP_ALIGN.RIGHT)
 
 
 def card(slide, x, y, w, h, title, body, accent=TEAL, body_size=13):
@@ -125,7 +156,11 @@ def source_label(ids: list[str], by_id: dict[str, dict]) -> str:
     return "来源：" + "、".join(labels[:2]) if labels else ""
 
 
-def build(plan: dict, base: Path, output: Path) -> int:
+def build(plan: dict, base: Path, output: Path, *, font: str | None = None) -> int:
+    global FONT
+    FONT = (font or os.environ.get("TRAVEL_PLAN_FONT") or "Microsoft YaHei").strip()
+    if not FONT:
+        FONT = "Microsoft YaHei"
     prs = Presentation()
     prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
     trip, operation = plan["trip"], plan["operation"]
@@ -134,6 +169,7 @@ def build(plan: dict, base: Path, output: Path) -> int:
     by_id = {x["id"]: x for x in sources}
     is_demo = bool(trip.get("demo"))
     status = operation["status"]
+    status_color = {"verified_open": TEAL, "verified_closed": CLOSED, "unverified": ORANGE_DARK}[status]
     status_label = {
         "verified_open": "已核实营业 · 项目仍需逐项确认",
         "verified_closed": "已核实暂停营业 · 请改期或更换地点",
@@ -154,7 +190,7 @@ def build(plan: dict, base: Path, output: Path) -> int:
     text(s, f"{trip['date']} · {trip.get('city') or '中国'}", .96, .72, 9.7, .35, 17, GOLD, True)
     text(s, f"{trip['place']}\n{trip['people']} 人游玩计划", .94, 1.55, 10.8, 1.70, 39, WHITE, True)
     text(s, "地图路线 · 时间安排 · 行前清单 · 信息来源", .98, 4.04, 10.0, .45, 18, WHITE)
-    box(s, .96, 5.12, 6.55, .69, ORANGE, True)
+    box(s, .96, 5.12, 6.55, .69, status_color, True)
     text(s, status_label, 1.16, 5.28, 6.13, .34, 16, WHITE, True)
     if is_demo:
         text(s, "演示数据，不可作为真实出行依据", .97, 6.76, 9.8, .36, 15, WHITE, True)
@@ -163,7 +199,7 @@ def build(plan: dict, base: Path, output: Path) -> int:
 
     # Availability and weather
     s = heading(prs, "01 · 先决定是否出发", "当天能玩吗？先看官方信息", "开园、预约和项目运行会变化；这页决定后续行程是否可执行。")
-    card(s, .65, 2.07, 5.84, 3.77, "营业与预约", f"{status_label}\n{operation.get('hours') or '营业时间待核实'}\n{operation.get('decision') or ''}", ORANGE, 15)
+    card(s, .65, 2.07, 5.84, 3.77, "营业与预约", f"{status_label}\n{operation.get('hours') or '营业时间待核实'}\n{operation.get('decision') or ''}", status_color, 15)
     card(s, 6.82, 2.07, 5.84, 3.77, "天气与穿着", weather.get("summary") or "目标日期天气尚未核实。\n出发前查看最新预报和预警。", TEAL, 15)
     box(s, .68, 6.11, 11.97, .55, PALE, True)
     text(s, "项目是否运行、演出是否举行，以目标日期园方公告和现场信息为准。", .90, 6.27, 11.4, .27, 13, NAVY, True)
@@ -188,7 +224,7 @@ def build(plan: dict, base: Path, output: Path) -> int:
                     "unknown": "当天开放待核实",
                 }[item.get("operation", "unknown")]
                 body = f"{item.get('area') or '园区内'} · {state}\n{item.get('why') or '按兴趣和现场排队决定'}"
-                accent = ORANGE if item.get("operation") == "verified_closed" else TEAL
+                accent = CLOSED if item.get("operation") == "verified_closed" else TEAL
                 card(s, x, y, 3.86, 1.94, item["name"], body, accent, 12.2)
             footer(prs, s, "资料出处见末页；任何未核实项目都不是开放承诺。")
 
@@ -206,7 +242,7 @@ def build(plan: dict, base: Path, output: Path) -> int:
     text(s, "建议顺序", 8.68, 2.35, 3.65, .43, 19, NAVY, True)
     for index, stop in enumerate(route[:7]):
         y = 2.94 + index * .51
-        text(s, f"{index + 1:02d}", 8.69, y, .48, .31, 13, ORANGE, True)
+        text(s, f"{index + 1:02d}", 8.69, y, .48, .31, 13, ORANGE_DARK, True)
         text(s, stop, 9.28, y, 3.03, .36, 14, NAVY)
     footer(prs, s, source_label(venue_map.get("source_ids", []), by_id))
 
@@ -217,13 +253,12 @@ def build(plan: dict, base: Path, output: Path) -> int:
         card(s, .68, 2.12, 11.96, 3.7, "先核实，再排时间", "当前缺少可用的开闭园或项目时间。不要把通用营业时间当作目标日期的承诺。", ORANGE, 17)
         footer(prs, s)
     else:
-        for page in range(0, len(itinerary), 6):
-            subset = itinerary[page:page + 6]
+        for page, subset in balanced_pages(itinerary, 6):
             s = heading(prs, "04 · 全天时间表", "今天怎么走", "时间含步行、排队和休息容错；根据现场情况替换同一区项目。")
             for index, event in enumerate(subset):
-                y = 2.03 + index * .75
+                y = row_y(index, len(subset), 6, 2.03, .75)
                 box(s, .66, y, 12.0, .65, WHITE, True)
-                box(s, .66, y, 2.09, .65, ORANGE if index % 2 == 0 else TEAL, True)
+                box(s, .66, y, 2.09, .65, ORANGE_DARK if index % 2 == 0 else TEAL, True)
                 text(s, f"{event['start']}–{event['end']}", .80, y + .17, 1.80, .27, 12.5, WHITE, True, align=PP_ALIGN.CENTER)
                 text(s, event["activity"], 2.95, y + .15, 5.32, .32, 15, NAVY, True)
                 text(s, event.get("buffer") or "", 8.38, y + .17, 1.62, .29, 11.5, TEAL, True)
@@ -253,19 +288,19 @@ def build(plan: dict, base: Path, output: Path) -> int:
                 item = caution if isinstance(caution, dict) else {"text": str(caution)}
                 y = 2.06 + index * .89
                 box(s, .67, y, 11.99, .75, WHITE, True)
-                box(s, .89, y + .17, .45, .40, ORANGE if index % 2 == 0 else TEAL, True)
+                box(s, .89, y + .17, .45, .40, ORANGE_DARK if index % 2 == 0 else TEAL, True)
                 text(s, str(page + index + 1), .99, y + .24, .24, .25, 11.5, WHITE, True, align=PP_ALIGN.CENTER)
                 text(s, item.get("text", ""), 1.58, y + .17, 10.76, .41, 13.6, NAVY)
             footer(prs, s, "资料出处见末页；实际规定以官方公告与现场提示为准。")
 
     # Sources
     if sources:
-        for page in range(0, len(sources), 7):
+        for page, subset in balanced_pages(sources, 7):
             s = heading(prs, "资料与链接", "从这里打开原始信息", "来源在目标日期前可能变化；出发前请重新查看营业与天气。")
-            for index, source in enumerate(sources[page:page + 7]):
-                y = 2.04 + index * .64
+            for index, source in enumerate(subset):
+                y = row_y(index, len(subset), 7, 2.04, .64)
                 box(s, .67, y, 11.99, .55, WHITE, True)
-                text(s, f"{page + index + 1:02d}", .88, y + .13, .45, .26, 11.5, ORANGE, True)
+                text(s, f"{page + index + 1:02d}", .88, y + .13, .45, .26, 11.5, ORANGE_DARK, True)
                 label = source.get("title", source["id"])[:43]
                 text(s, label, 1.55, y + .11, 8.80, .31, 13, NAVY, True, link=source["url"])
                 text(s, f"{source.get('observed_at', '')[:10]}  ↗", 10.55, y + .13, 1.75, .27, 10, TEAL, True, link=source["url"])
@@ -284,14 +319,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plan", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--font", help="Installed font family; overrides TRAVEL_PLAN_FONT (default: Microsoft YaHei)")
     args = parser.parse_args()
     plan = json.loads(args.plan.read_text(encoding="utf-8"))
     errors = validate(plan, args.plan.resolve().parent)
     if errors:
         print(json.dumps({"valid": False, "errors": errors}, ensure_ascii=False, indent=2), file=sys.stderr)
         return 1
-    slides = build(plan, args.plan.resolve().parent, args.output)
-    print(json.dumps({"pptx": str(args.output.resolve()), "slides": slides}, ensure_ascii=False))
+    slides = build(plan, args.plan.resolve().parent, args.output, font=args.font)
+    print(json.dumps({"pptx": str(args.output.resolve()), "slides": slides, "font": FONT}, ensure_ascii=False))
     return 0
 
 
