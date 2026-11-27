@@ -28,6 +28,16 @@ python scripts/validate_plan.py path/to/plan.json
 python scripts/build_ppt.py path/to/plan.json path/to/travel-plan.pptx
 ```
 
+非 Windows 用户可以指定本机已安装的中文字体；优先级为 `--font`、环境变量 `TRAVEL_PLAN_FONT`、默认 `Microsoft YaHei`：
+
+```bash
+python scripts/build_ppt.py path/to/plan.json path/to/travel-plan.pptx --font "PingFang SC"
+```
+
+生成器会同时声明西文和东亚字体；默认东亚字体名为 `微软雅黑`。它不会安装或嵌入字体，跨电脑使用仍需选择可用字体并检查渲染结果。
+
+`0.2.0` 保留原暖橙装饰色 `#E7774F`，将橙底白字及白色卡片上的橙字改用 `#BC5230`（对比度约 4.79:1；不用于米白底小字）；关闭状态独立使用 `#B3261E`，页脚为 9.5 磅。时间表和来源列表均衡分页并居中排布，10 行时间表为 5+5、8 条来源为 4+4，无需删减资料来迁就版式。长段落仍需检查是否溢出。
+
 `examples/example-plan.json` 是**虚构演示数据**，仅供测试脚本；不能当成真实攻略。可运行：
 
 ```bash
@@ -43,4 +53,4 @@ python scripts/build_ppt.py examples/example-plan.json output/example.pptx
 
 ## 版本迭代
 
-首版为 `0.1.0`，变更记录见 [CHANGELOG.md](CHANGELOG.md)。后续可以继续完善景区来源接入、地图路线、PPT 主题和素材授权流程；保留三项基础输入和事实核查门槛。
+当前版本为 `0.2.0`，变更记录见 [CHANGELOG.md](CHANGELOG.md)。保留三项基础输入和事实核查门槛。

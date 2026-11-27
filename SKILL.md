@@ -25,9 +25,19 @@ Deliver a PowerPoint that a traveller can open and use: opening/booking decision
 ```bash
 python scripts/validate_plan.py plan.json
 python scripts/build_ppt.py plan.json output.pptx
+# Optional: choose an installed font on macOS/Linux or another workstation.
+python scripts/build_ppt.py plan.json output.pptx --font "Source Han Sans SC"
 ```
 
 `python-pptx` and Pillow are listed in `requirements.txt`. The scripts do not browse, download, authenticate, change proxies, or publish. The agent prepares the plan JSON from current sources; the builder only turns that evidence into a deck. A synthetic example for testing is in `examples/example-plan.json`.
+
+## Readable PowerPoint output
+
+Preserve the navy/teal/warm-orange/paper palette. `ORANGE` (`#E7774F`) is decorative; use `ORANGE_DARK` (`#BC5230`) for white-on-orange labels and orange text on white cards. Deep orange against `PAPER` is only about 4.39:1, so do not use it for small text directly on that background. Use `CLOSED` (`#B3261E`) for verified closures and retain the written status so color is never the only signal. Do not lighten `MUTED` without rechecking text contrast. Keep footers at least 9.5 pt.
+
+The builder writes Latin and East Asian font declarations explicitly. Font selection is `--font` / `build(..., font=...)`, then `TRAVEL_PLAN_FONT`, then `Microsoft YaHei` (East Asian name `微软雅黑`). For another OS, choose an actually installed CJK font such as PingFang SC or Source Han Sans SC and re-render. These declarations do not embed fonts or guarantee identical layout on machines missing the font; PowerPoint has no CSS-style fallback chain here.
+
+Timetable and source pages balance rows across pages and center shorter lists within the content area (10 events become 5+5; 8 sources become 4+4). Preserve itinerary and evidence entries rather than cutting them to fit a page. Long text still needs a visual fit check; this is row-count balancing, not automatic text-height measurement.
 
 ## Public repository boundary
 
